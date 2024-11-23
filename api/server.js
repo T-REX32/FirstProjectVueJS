@@ -1,53 +1,88 @@
-import express from 'express'
-import mongoose from 'mongoose'
-import cors from 'cors'
-import dotenv from 'dotenv'
+// server.js
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
 
-dotenv.config()
+const app = express();
 
-const app = express()
-app.use(cors())
-app.use(express.json())
+// Middleware
+app.use(cors());
+app.use(express.json());
 
-const MONGODB_URI = process.env.MONGODB_URI
-if (!MONGODB_URI) {
-  console.error('MONGODB_URI is not defined in the environment variables')
-  process.exit(1)
-}
+// MongoDB Connection
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+const db = mongoose.connection;
+db.on('error', console.error.bind(console, 'Connection error:'));
+db.once('open', () => {
+  console.log('Connected to MongoDB Atlas');
+});
 
-mongoose.connect(MONGODB_URI, {
-  serverSelectionTimeoutMS: 5000
-})
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => {
-    console.error('Could not connect to MongoDB:')
-    console.error('Error name:', err.name)
-    console.error('Error message:', err.message)
-    if (err.reason) console.error('Error reason:', err.reason)
-    if (err.code) console.error('Error code:', err.code)
-    if (err.stack) console.error('Error stack:', err.stack)
-    process.exit(1)
-  })
-
-const userSchema = new mongoose.Schema({
-  firstName: String,
-  lastName: String,
+// Mongoose Schema
+const CurriculumSchema = new mongoose.Schema({
+  nomeCompleto: String,
   email: String,
-})
+  telefone: String,
+  endereco: String,
+  formacaoAcademica: [
+    { curso: String, instituicao: String, anoConclusao: String },
+  ],
+  experienciaProfissional: [
+    { empresa: String, cargo: String, periodo: String },
+  ],
+  habilidades: [String],
+  idiomas: [String],
+  objetivoProfissional: String,
+});
+const Curriculum = mongoose.model('Curriculum', CurriculumSchema);
 
-const User = mongoose.model('User', userSchema)
-
-app.post('/api/users', async (req, res) => {
+// Routes
+app.get('/curriculos', async (req, res) => {
   try {
-    const user = new User(req.body)
-    await user.save()
-    res.status(201).json(user)
+    const curriculos = await Curriculum.find();
+    res.json(curriculos);
   } catch (error) {
-    res.status(400).json({ message: error.message })
+    res.status(500).json({ message: 'Error retrieving curriculos' });
   }
-})
+});
 
-const PORT = process.env.PORT || 3000
+app.post('/curriculos', async (req, res) => {
+  try {
+    const newCurriculum = new Curriculum(req.body);
+    await newCurriculum.save();
+    res.status(201).json(newCurriculum);
+  } catch (error) {
+    res.status(400).json({ message: 'Error creating curriculum' });
+  }
+});
+
+app.put('/curriculos/:id', async (req, res) => {
+  try {
+    const updatedCurriculum = await Curriculum.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    res.json(updatedCurriculum);
+  } catch (error) {
+    res.status(400).json({ message: 'Error updating curriculum' });
+  }
+});
+
+app.delete('/curriculos/:id', async (req, res) => {
+  try {
+    await Curriculum.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Curriculum deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting curriculum' });
+  }
+});
+
+// Start Server
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
+  console.log(`Server running on http://localhost:${PORT}`);
+});
